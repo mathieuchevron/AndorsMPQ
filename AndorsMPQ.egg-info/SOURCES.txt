@@ -1,0 +1,10 @@
+pyproject.toml
+AndorsMPQ/__init__.py
+AndorsMPQ/metadata.py
+AndorsMPQ/raw_data.py
+AndorsMPQ/sif_file.py
+AndorsMPQ.egg-info/PKG-INFO
+AndorsMPQ.egg-info/SOURCES.txt
+AndorsMPQ.egg-info/dependency_links.txt
+AndorsMPQ.egg-info/requires.txt
+AndorsMPQ.egg-info/top_level.txt

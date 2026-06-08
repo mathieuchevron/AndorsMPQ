@@ -1,11 +1,13 @@
+from __future__ import annotations
 """
 Class SifFile : Point d'entrée pour lire un fichier .sif
 """
 
+
 import os
 import numpy as np
 from typing import Optional
-from __future__ import annotations
+
 
 try:
     import sif_parser
@@ -14,6 +16,7 @@ except ImportError as e:
 
 from .metadata import AcquisitionMetadata
 from .raw_data import AcquisitionRawData
+from .analysis import Analysis
 
 class SifFile:
     """
@@ -77,5 +80,8 @@ class SifFile:
     def raw_data(self) -> AcquisitionRawData:
         return self._raw_data
     
+    @property
+    def analysis(self) -> Analysis:
+        return Analysis(self._raw_data)
     
     

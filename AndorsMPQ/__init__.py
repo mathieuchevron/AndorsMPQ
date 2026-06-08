@@ -15,6 +15,7 @@ Usage minimal
 from .sif_file import SifFile
 from .metadata import AcquisitionMetadata
 from .raw_data import AcquisitionRawData
+from .analysis import Analysis
 
-__all__ = ["SifFile", "AcquisitionMetadata", "AcquisitionRawData"]
+__all__ = ["SifFile", "AcquisitionMetadata", "AcquisitionRawData", "Analysis"]
 __version__ = "0.1.0"

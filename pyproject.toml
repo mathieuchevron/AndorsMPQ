@@ -1,8 +1,8 @@
 [build-system]
 requires = ["setuptools"]
-build-backend = "setuptools.backends.legacy:build"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "AndorsMPQ"
 version = "0.1.0"
-dependencies = ["sif_parser", "numpy"]
+dependencies = ["sif_parser", "numpy", "matplotlib"]
