@@ -4,5 +4,5 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "AndorsMPQ"
-version = "0.1.0"
+version = "1.0"
 dependencies = ["sif_parser", "numpy", "matplotlib", "scipy"]

@@ -1,3 +1,3 @@
-from .AndorsMPQ import SifFile, AcquisitionMetadata, AcquisitionRawData
+from .AndorsMPQ import SifFile
 
-__all__ = ["SifFile", "AcquisitionMetadata", "AcquisitionRawData"]
+__all__ = ["SifFile"]
