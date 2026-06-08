@@ -1,2 +1,0 @@
-sif_parser
-numpy
