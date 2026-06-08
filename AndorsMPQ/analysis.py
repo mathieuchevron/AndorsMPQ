@@ -47,6 +47,30 @@ class Analysis:
         plt.tight_layout()
         plt.show()
 
+    def spectrum(self, frame: int = 0) -> None:
+        """
+        Affiche le spectre en counts intégré sur tous les pixels y.
+ 
+        Pour chaque pixel x, somme les counts sur l'ensemble des lignes y.
+ 
+        Parameters
+        ----------
+        frame : int
+            Indice de la frame (0-based). Par défaut 0.
+        """
+        data = self._raw_data.frame(frame)
+        spectrum = data.sum(axis=0)
+        pixels = np.arange(spectrum.shape[0])
+ 
+        fig, ax = plt.subplots()
+        ax.plot(pixels, spectrum)
+        ax.set_title(f"Spectre — frame {frame}")
+        ax.set_xlabel("Pixel x")
+        ax.set_ylabel("Counts")
+        plt.grid()
+        plt.tight_layout()
+        plt.show()
+
     def __repr__(self) -> str:
         return (
             f"Analysis("
