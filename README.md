@@ -90,9 +90,6 @@ f.analysis.spec_ROI_manual(xmin=100, xmax=400)
 Automatically detects the signal band (spatial ROI) and the spectral region (spectral ROI).
 
 ```python
-f.analysis.spec_ROI_auto()
-
-# Adjust parameters if needed
 f.analysis.spec_ROI_auto(
     frame = 0,                  # Frame index.
     spatial_half = 10,          # Half-width of the spatial ROI in y-lines.
@@ -102,8 +99,29 @@ f.analysis.spec_ROI_auto(
     photon = False,             # If True, converts the spectrum to incident photons.
     sensitivity = 3.6,          # Conversion factor e⁻/ADU (iXon Ultra 897, 1 MHz).
     QE = 0.55,                  # Quantum efficiency of the sensor at the signal wavelength.
-    gaussian_fit = False        # If True, fits a Gaussian curve to the spectral ROI and returns the fit parameters.
+    gaussian_fit = False,       # If True, fits a Gaussian to the spectral ROI.
+    plot = True,                # If False, suppresses plot and prints. Result still returned.
     )
+```
+
+The method always returns a dict. If `gaussian_fit=False`, only the SNR is returned:
+
+```python
+result = f.analysis.spec_ROI_auto(plot=False)
+result["snr"]           # Signal-to-noise ratio
+```
+
+If `gaussian_fit=True`, the full fit parameters are returned:
+
+```python
+result = f.analysis.spec_ROI_auto(gaussian_fit=True, plot=False)
+result["center"]        # Peak position in pixels
+result["fwhm"]          # Full width at half maximum in pixels
+result["amplitude"]     # Peak amplitude
+result["sigma_fit"]     # Gaussian standard deviation in pixels
+result["offset"]        # Baseline offset from the fit
+result["perr"]          # 1σ uncertainties on [amplitude, center, sigma_fit, offset]
+result["snr"]           # Signal-to-noise ratio
 ```
 
 ---

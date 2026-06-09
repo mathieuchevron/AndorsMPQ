@@ -111,7 +111,8 @@ class Analysis:
         sensitivity: float = 3.6,
         QE: float = 0.55,
         gaussian_fit: bool = False,
-    ) -> dict | None:
+        plot: bool = True,
+    ) -> dict:
         """
         Détecte automatiquement le ROI spatial et spectral, puis affiche le spectre.
 
@@ -136,13 +137,12 @@ class Analysis:
         gaussian_fit : bool
             Si True, ajuste une gaussienne sur le ROI spectral et retourne
             les paramètres du fit.
+        
 
         Returns
-        -------
-        dict | None
-            None si gaussian_fit=False.
-            Dict avec amplitude, center, sigma_fit, fwhm, offset, perr si
-            gaussian_fit=True.
+        ------
+            Dict avec amplitude, center, sigma_fit, fwhm, offset, perr , snr si gaussian_fit=True.
+            snr sinon
         """
 
         data = self._raw_data.frame(frame)
@@ -198,7 +198,12 @@ class Analysis:
 
         ylabel = unit_str + (" (baseline subtracted)" if subtract_baseline else "")
 
-        # ── 6. Fit gaussien ───────────────────────────────────
+        # ── 6. SNR ────────────────────────────────────────────────────────
+        noise     = outside.std()
+        signal    = spectrum[xmin:xmax + 1].max() - baseline
+        snr_value = signal / noise if noise > 0 else None
+
+        # ── 7. Fit gaussien ───────────────────────────────────
         fit_result = None
         if gaussian_fit:
             pixels_roi   = np.arange(xmin, xmax + 1)
@@ -228,55 +233,61 @@ class Analysis:
                     "fwhm"      : fwhm,
                     "offset"    : offset_fit,
                     "perr"      : perr,
+                    "snr"       : snr_value,
                 }
             except RuntimeError:
                 print("Warning: Gaussian fit failed.")
+        
+        # ── 8. Tracé ──────────────────────────────────────────────────────
+        if plot:
+            pixels = np.arange(spectrum.shape[0])
 
-        # ── 7. Tracé ──────────────────────────────────────────────────────
-        pixels = np.arange(spectrum.shape[0])
+            _, ax = plt.subplots()
+            ax.plot(pixels, spectrum_plot, color="steelblue", label="Raw spectrum")
+            ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
+            ax.axhline(threshold - baseline if subtract_baseline else threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
+            ax.axhline(0, color="black", linestyle="-", linewidth=0.5)
+            ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
+            ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
+            ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
 
-        _, ax = plt.subplots()
-        ax.plot(pixels, spectrum_plot, color="steelblue", label="Raw spectrum")
-        ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
-        ax.axhline(threshold - baseline if subtract_baseline else threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
-        ax.axhline(0, color="black", linestyle="-", linewidth=0.5)
-        ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
-        ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
-        ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
+            if gaussian_fit and fit_result is not None:
+                x_fit = np.linspace(xmin, xmax, 500)
+                ax.plot(x_fit, _gaussian(x_fit, *popt),
+                        color="red", linewidth=1.5,
+                        label=f"Gaussian fit (FWHM={fit_result['fwhm']:.1f} px)")
 
-        if gaussian_fit and fit_result is not None:
-            x_fit = np.linspace(xmin, xmax, 500)
-            ax.plot(x_fit, _gaussian(x_fit, *popt),
-                    color="red", linewidth=1.5,
-                    label=f"Gaussian fit (FWHM={fit_result['fwhm']:.1f} px)")
+            ax.set_title(
+                f"Auto ROI spectrum — frame {frame}\n"
+                f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
+            )
+            ax.set_xlabel("Pixel x")
+            ax.set_ylabel(ylabel)
+            ax.legend()
+            plt.grid()
+            plt.tight_layout()
+            roi_signal = spectrum_plot[xmin:xmax + 1]
+            y_min = spectrum_plot.min()
+            y_max = roi_signal.max()
+            margin = 0.1 * (y_max - y_min)
+            ax.set_ylim(y_min - margin, y_max + margin)
+            plt.show()
 
-        ax.set_title(
-            f"Auto ROI spectrum — frame {frame}\n"
-            f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
-        )
-        ax.set_xlabel("Pixel x")
-        ax.set_ylabel(ylabel)
-        ax.legend()
-        plt.grid()
-        plt.tight_layout()
-        roi_signal = spectrum_plot[xmin:xmax + 1]
-        y_min = spectrum_plot.min()
-        y_max = roi_signal.max()
-        margin = 0.1 * (y_max - y_min)
-        ax.set_ylim(y_min - margin, y_max + margin)
-        plt.show()
+            print(f"Spatial ROI  : lines [{r0}, {r1}] — peak y={peak_row}")
+            print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
+            if snr_value is not None:
+                print(f"SNR          : {snr_value:.2f}  (signal={signal:.2f}, noise={noise:.2f})")
+            else:
+                print("SNR          : undefined (noise = 0)")
+            if subtract_baseline:
+                print(f"Baseline     : {baseline:.2f} {unit_str}")
+            if gaussian_fit and fit_result is not None:
+                print(f"Gaussian fit :")
+                print(f"  Center    : {fit_result['center']:.2f} px  ± {fit_result['perr'][1]:.2f}")
+                print(f"  FWHM      : {fit_result['fwhm']:.2f} px  ± {2 * np.sqrt(2 * np.log(2)) * fit_result['perr'][2]:.2f}")
+                print(f"  Amplitude : {fit_result['amplitude']:.2f}  ± {fit_result['perr'][0]:.2f}")
 
-        print(f"Spatial ROI  : lines [{r0}, {r1}] — peak y={peak_row}")
-        print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
-        if subtract_baseline:
-            print(f"Baseline     : {baseline:.2f} {unit_str}")
-        if gaussian_fit and fit_result is not None:
-            print(f"Gaussian fit :")
-            print(f"  Center    : {fit_result['center']:.2f} px  ± {fit_result['perr'][1]:.2f}")
-            print(f"  FWHM      : {fit_result['fwhm']:.2f} px  ± {2 * np.sqrt(2 * np.log(2)) * fit_result['perr'][2]:.2f}")
-            print(f"  Amplitude : {fit_result['amplitude']:.2f}  ± {fit_result['perr'][0]:.2f}")
-
-        return fit_result
+        return fit_result if fit_result is not None else {"snr": snr_value}
 
     @staticmethod
     def _largest_region(mask: np.ndarray):
