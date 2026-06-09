@@ -94,10 +94,15 @@ f.analysis.spec_ROI_auto()
 
 # Adjust parameters if needed
 f.analysis.spec_ROI_auto(
-    spatial_half=15,   # half-width of spatial ROI in y lines
-    sigma=8,           # Gaussian smoothing (larger = smoother)
-    n_std=0.5          # threshold (smaller = more inclusive)
-)
+    frame = 0,                  # Frame index.
+    spatial_half = 10,          # Half-width of the spatial ROI in y-lines.
+    sigma = 5.0,                # Standard deviation of the Gaussian filter for spectral smoothing.
+    n_std = 1.0,                # Number of standard deviations for the spectral threshold.
+    subtract_baseline = False,  # If True, subtracts the mean of pixels outside the spectral ROI.
+    photon = False,             # If True, converts the spectrum to incident photons.
+    sensitivity = 3.6,          # Conversion factor e⁻/ADU (iXon Ultra 897, 1 MHz).
+    QE = 0.55                   # Quantum efficiency of the sensor at the signal wavelength.
+    )
 ```
 
 ---
