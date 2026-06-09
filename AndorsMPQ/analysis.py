@@ -21,27 +21,36 @@ class Analysis:
         self._raw_data = raw_data
         self._metadata = metadata
 
-    def image(self, frame: int = 0) -> None:
+    def image(self, frame: int = 0, wavelength_axis: np.ndarray | None = None,) -> None:
         """
         Affiche l'image CCD brute d'une frame.
 
         Parameters
         ----------
-        frame : int
+        frame : 
             Indice de la frame.
+        wavelength_axis : 
+            Si fourni, l'axe x est affiché en nm.
         """
         data = self._raw_data.frame(frame)
 
-        fig, ax = plt.subplots()
-        im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto")
+        _, ax = plt.subplots()
+        if wavelength_axis is not None:
+            extent = [wavelength_axis[0], wavelength_axis[-1], 0, data.shape[0]]
+            im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto", extent=extent)
+            ax.set_xlabel("Wavelength (nm)")
+        else:
+            im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto")
+            ax.set_xlabel("Pixel x")
+
+        fig = ax.get_figure()
         fig.colorbar(im, ax=ax, label="Counts")
         ax.set_title(f"Raw CCD image — frame {frame}")
-        ax.set_xlabel("Pixel x")
         ax.set_ylabel("Pixel y")
         plt.tight_layout()
         plt.show()
 
-    def spectrum(self, frame: int = 0) -> None:
+    def spectrum(self, frame: int = 0, wavelength_axis: np.ndarray | None = None,) -> None:
         """
         Affiche le spectre en counts intégré sur tous les pixels y.
 
@@ -52,12 +61,18 @@ class Analysis:
         """
         data = self._raw_data.frame(frame)
         spectrum = data.sum(axis=0)
-        pixels = np.arange(spectrum.shape[0])
 
-        fig, ax = plt.subplots()
-        ax.plot(pixels, spectrum)
+        if wavelength_axis is not None:
+            x_axis = wavelength_axis
+            xlabel = "Wavelength (nm)"
+        else:
+            x_axis = np.arange(spectrum.shape[0])
+            xlabel = "Pixel x"
+
+        _, ax = plt.subplots()
+        ax.plot(x_axis, spectrum)
         ax.set_title(f"Spectrum — frame {frame}")
-        ax.set_xlabel("Pixel x")
+        ax.set_xlabel(xlabel)
         ax.set_ylabel("Counts")
         plt.grid()
         plt.tight_layout()
@@ -112,6 +127,7 @@ class Analysis:
         QE: float = 0.55,
         gaussian_fit: bool = False,
         plot: bool = True,
+        wavelength_axis: np.ndarray | None = None,
     ) -> dict:
         """
         Détecte automatiquement le ROI spatial et spectral, puis affiche le spectre.
@@ -135,14 +151,17 @@ class Analysis:
         QE : float
             Efficacité quantique du capteur à la longueur d'onde du signal.
         gaussian_fit : bool
-            Si True, ajuste une gaussienne sur le ROI spectral et retourne
-            les paramètres du fit.
-        
+            Si True, ajuste une gaussienne sur le ROI spectral.
+        plot : bool
+            Si False, supprime le tracé et les prints. Le dict est toujours retourné.
+        wavelength_axis : np.ndarray | None
+            Si fourni, l'axe x est affiché en nm. Obtenu via wavelength_axis().
 
         Returns
-        ------
-            Dict avec amplitude, center, sigma_fit, fwhm, offset, perr , snr si gaussian_fit=True.
-            snr sinon
+        -------
+        dict
+            Contient toujours 'snr'. Si gaussian_fit=True, contient également
+            amplitude, center, sigma_fit, fwhm, offset, perr, center_nm.
         """
 
         data = self._raw_data.frame(frame)
@@ -190,7 +209,7 @@ class Analysis:
         else:
             spectrum_plot = spectrum
 
-        # ── 5. Unité ──────────────────────────────────────────────────────
+        # ── 5. Unité et axe x ─────────────────────────────────────────────
         if photon:
             unit_str = "photons"
         else:
@@ -198,12 +217,19 @@ class Analysis:
 
         ylabel = unit_str + (" (baseline subtracted)" if subtract_baseline else "")
 
+        if wavelength_axis is not None:
+            x_axis = wavelength_axis
+            xlabel = "Wavelength (nm)"
+        else:
+            x_axis = np.arange(spectrum.shape[0])
+            xlabel = "Pixel x"
+
         # ── 6. SNR ────────────────────────────────────────────────────────
         noise     = outside.std()
         signal    = spectrum[xmin:xmax + 1].max() - baseline
         snr_value = signal / noise if noise > 0 else None
 
-        # ── 7. Fit gaussien ───────────────────────────────────
+        # ── 7. Fit gaussien ───────────────────────────────────────────────
         fit_result = None
         if gaussian_fit:
             pixels_roi   = np.arange(xmin, xmax + 1)
@@ -234,42 +260,53 @@ class Analysis:
                     "offset"    : offset_fit,
                     "perr"      : perr,
                     "snr"       : snr_value,
+                    "center_nm" : float(np.interp(center, np.arange(len(wavelength_axis)), wavelength_axis))
+                                  if wavelength_axis is not None else None,
                 }
             except RuntimeError:
                 print("Warning: Gaussian fit failed.")
-        
+
         # ── 8. Tracé ──────────────────────────────────────────────────────
         if plot:
-            pixels = np.arange(spectrum.shape[0])
-
             _, ax = plt.subplots()
-            ax.plot(pixels, spectrum_plot, color="steelblue", label="Raw spectrum")
-            ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
-            ax.axhline(threshold - baseline if subtract_baseline else threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
+            ax.plot(x_axis, spectrum_plot, color="steelblue", label="Raw spectrum")
+            ax.plot(x_axis, smoothed - baseline if subtract_baseline else smoothed,
+                    color="orange", linewidth=2, linestyle="--", label="Smoothed")
+            ax.axhline(
+                threshold - baseline if subtract_baseline else threshold,
+                color="gray", linestyle=":", linewidth=0.8,
+                label=f"Threshold (µ + {n_std}σ)"
+            )
             ax.axhline(0, color="black", linestyle="-", linewidth=0.5)
-            ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
-            ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
-            ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
+            ax.axvspan(x_axis[xmin], x_axis[xmax], alpha=0.15, color="green",
+                       label=f"Spectral ROI [{xmin}, {xmax}]")
+            ax.axvline(x_axis[xmin], color="green", linestyle="--", linewidth=0.8)
+            ax.axvline(x_axis[xmax], color="green", linestyle="--", linewidth=0.8)
 
             if gaussian_fit and fit_result is not None:
-                x_fit = np.linspace(xmin, xmax, 500)
-                ax.plot(x_fit, _gaussian(x_fit, *popt),
+                x_fit_idx = np.linspace(xmin, xmax, 500)
+                x_fit     = np.interp(x_fit_idx, np.arange(len(x_axis)), x_axis)
+                if wavelength_axis is not None:
+                    fwhm_label = f"FWHM={fit_result['fwhm'] * np.mean(np.diff(wavelength_axis)):.2f} nm"
+                else:
+                    fwhm_label = f"FWHM={fit_result['fwhm']:.1f} px"
+                ax.plot(x_fit, _gaussian(x_fit_idx, *popt),
                         color="red", linewidth=1.5,
-                        label=f"Gaussian fit (FWHM={fit_result['fwhm']:.1f} px)")
+                        label=f"Gaussian fit ({fwhm_label})")
 
             ax.set_title(
                 f"Auto ROI spectrum — frame {frame}\n"
                 f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
             )
-            ax.set_xlabel("Pixel x")
+            ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
             ax.legend()
             plt.grid()
             plt.tight_layout()
             roi_signal = spectrum_plot[xmin:xmax + 1]
-            y_min = spectrum_plot.min()
-            y_max = roi_signal.max()
-            margin = 0.1 * (y_max - y_min)
+            y_min      = spectrum_plot.min()
+            y_max      = roi_signal.max()
+            margin     = 0.1 * (y_max - y_min)
             ax.set_ylim(y_min - margin, y_max + margin)
             plt.show()
 
@@ -283,7 +320,10 @@ class Analysis:
                 print(f"Baseline     : {baseline:.2f} {unit_str}")
             if gaussian_fit and fit_result is not None:
                 print(f"Gaussian fit :")
-                print(f"  Center    : {fit_result['center']:.2f} px  ± {fit_result['perr'][1]:.2f}")
+                center_str = f"{fit_result['center']:.2f} px"
+                if fit_result["center_nm"] is not None:
+                    center_str += f"  ({fit_result['center_nm']:.2f} nm)"
+                print(f"  Center    : {center_str}  ± {fit_result['perr'][1]:.2f}")
                 print(f"  FWHM      : {fit_result['fwhm']:.2f} px  ± {2 * np.sqrt(2 * np.log(2)) * fit_result['perr'][2]:.2f}")
                 print(f"  Amplitude : {fit_result['amplitude']:.2f}  ± {fit_result['perr'][0]:.2f}")
 
@@ -321,6 +361,40 @@ class Analysis:
         if best_start is None:
             return None, None
         return best_start, best_start + best_len - 1
+    
+
+    def wavelength_axis(
+        self,
+        x_ref: float,               # Postion de la reference sur le capteur en pixel
+        lambda_ref: float,          # Longueur d'onde de la reference en nm
+        f: float,                   # Focale de la lentille en mm
+        N: float,                   # Densité du réseau en traits/mm
+        m: int,                     # Ordre de diffraction
+        theta_0: float,             # Angle de diffraction de la référence en degrés
+        delta: float,               # Angle entre axe optique réseau - lentille en degrés
+        alpha: float,               # Angle entre axe optique lentille - caméra en degrés
+        pixel_size: float,          # Taille d'un pixel en mm
+    ) -> np.ndarray:
+
+        n_pixels = self._raw_data.shape[2]
+        x = np.arange(n_pixels)
+
+        theta_0_rad = np.deg2rad(theta_0 + delta)
+        alpha_rad = np.deg2rad(alpha)
+
+        # Position physique sur le capteur
+        X = (x - x_ref) * pixel_size
+
+        # Intermédiaire B
+        B = X / f + np.sin(theta_0_rad) / np.cos(alpha_rad + theta_0_rad)
+
+        # Angle local psi
+        psi = np.arctan(B * np.cos(alpha_rad) / (1 + B * np.sin(alpha_rad))) - theta_0_rad
+
+        # Relation de dispersion exacte
+        wavelength = lambda_ref + (np.sin(theta_0_rad + psi) - np.sin(theta_0_rad)) / (m * N) * 1e6
+
+        return wavelength
 
     def __repr__(self) -> str:
         return (
