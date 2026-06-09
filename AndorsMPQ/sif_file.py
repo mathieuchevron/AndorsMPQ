@@ -76,7 +76,7 @@ class SifFile:
     @property
     def analysis(self) -> Analysis:
         """Outils d'analyse."""
-        return Analysis(self._raw_data)
+        return Analysis(self._raw_data, self._metadata)
 
     # ------------------------------------------------------------------ #
     # Représentation                                                       #

@@ -53,6 +53,9 @@ class AcquisitionMetadata:
     detector_dimensions: Optional[Tuple[int, int]] = None
     """Dimensions physiques du capteur (largeur, hauteur) en pixels."""
 
+    data_type: Optional[str] = None  
+    """ "Counts", "Electrons", "Photons"... """
+
     # ------------------------------------------------------------------ #
     #  Gain & obturateur                                                   #
     # ------------------------------------------------------------------ #
@@ -132,6 +135,7 @@ class AcquisitionMetadata:
             detector_temperature=_get("DetectorTemperature"),
             detector_type=_get("DetectorType"),
             detector_dimensions=_get("DetectorDimensions"),
+            data_type=_get("DataType"),
             # Gain & obturateur
             em_gain_dac=_get("GainDAC"),
             shutter_time=_get("ShutterTime"),
@@ -195,6 +199,7 @@ class AcquisitionMetadata:
         lines.append(_row("  Temperature", self.detector_temperature, "°C"))
         lines.append("")
         lines.append("  [Acquisition]")
+        lines.append(_row("  Data type", self.data_type))
         lines.append(_row("  Exposure time", self.exposure_time, "s"))
         lines.append(_row("  Cycle time", self.cycle_time, "s"))
         lines.append(_row("  Accumulated cycles", self.accumulated_cycles))

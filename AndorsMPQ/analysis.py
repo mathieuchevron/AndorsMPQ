@@ -9,21 +9,16 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
 from .raw_data import AcquisitionRawData
-
+from .metadata import AcquisitionMetadata
 
 class Analysis:
     """
     Fournit des méthodes d'analyse à partir des données brutes.
     """
 
-    def __init__(self, raw_data: AcquisitionRawData):
-        """
-        Parameters
-        ----------
-        raw_data : AcquisitionRawData
-            Données pixel brutes issues de SifFile.
-        """
+    def __init__(self, raw_data: AcquisitionRawData, metadata: AcquisitionMetadata):
         self._raw_data = raw_data
+        self._metadata = metadata
 
     def image(self, frame: int = 0) -> None:
         """
@@ -110,6 +105,10 @@ class Analysis:
         spatial_half: int = 10,
         sigma: float = 5.0,
         n_std: float = 1.0,
+        subtract_baseline: bool = False,
+        photon: bool = False,
+        sensitivity: float = 3.6,
+        QE: float = 0.55,
     ) -> None:
         """
         Détecte automatiquement le ROI spatial et spectral, puis affiche le spectre.
@@ -124,6 +123,14 @@ class Analysis:
             Écart-type du filtre gaussien pour le lissage spectral.
         n_std : float
             Nombre d'écarts-types pour le seuil spectral.
+        subtract_baseline : bool
+            Si True, soustrait la moyenne des pixels hors ROI spectral.
+        photon : bool
+            Si True, convertit le spectre en photons incidents.
+        sensitivity : float
+            Facteur de conversion e⁻/ADU (iXon Ultra 897, 1 MHz).
+        QE : float
+            Efficacité quantique du capteur à la longueur d'onde du signal.
         """
         data = self._raw_data.frame(frame)
 
@@ -136,6 +143,19 @@ class Analysis:
         # ── 2. Extraction spectre sur ROI spatial ─────────────────────────
         spectrum = data[r0:r1, :].sum(axis=0).astype(float)
 
+        # ── 2.5 Conversion en photons ─────────────────────────────────────
+        if photon:
+            dt = (self._metadata.data_type or "").strip().lower()
+
+            if dt == "counts":
+                spectrum = spectrum * sensitivity / QE
+            elif dt == "electrons":
+                spectrum = spectrum / QE
+            elif dt == "photons":
+                pass  # déjà en photons, rien à faire
+            else:
+                print(f"Warning: unknown DataType '{self._metadata.data_type}', no conversion applied.")
+
         # ── 3. ROI spectral ───────────────────────────────────────────────
         smoothed = gaussian_filter1d(spectrum, sigma=sigma)
         threshold = smoothed.mean() + n_std * smoothed.std()
@@ -144,17 +164,40 @@ class Analysis:
 
         if xmin is None:
             raise RuntimeError(
-                "No signal region detected."
+                "No signal region detected. "
                 "Try reducing n_std or increasing sigma."
             )
 
-        # ── 4. Tracé ──────────────────────────────────────────────────────
+        # ── 4. Soustraction de baseline ───────────────────────────────────
+        outside = np.concatenate([spectrum[:xmin], spectrum[xmax + 1:]])
+        baseline = outside.mean()
+
+        if subtract_baseline:
+            spectrum_plot = spectrum - baseline
+        else:
+            spectrum_plot = spectrum
+
+        # ── 5. Unité ──────────────────────────────────────────────────────
+        if photon:
+            unit_str = "photons"
+        else:
+            unit_str = (self._metadata.data_type or "counts").strip().lower()
+
+        ylabel = unit_str + (" (baseline subtracted)" if subtract_baseline else "")
+
+        # ── 6. Tracé ──────────────────────────────────────────────────────
         pixels = np.arange(spectrum.shape[0])
 
         _, ax = plt.subplots()
-        ax.plot(pixels, spectrum, color="steelblue", label="Raw spectrum")
-        ax.plot(pixels, smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
-        ax.axhline(threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
+        ax.plot(pixels, spectrum_plot, color="steelblue", label="Raw spectrum")
+        ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed,
+                color="orange", linewidth=2, linestyle="--", label="Smoothed")
+        ax.axhline(
+            threshold - baseline if subtract_baseline else threshold,
+            color="gray", linestyle=":", linewidth=0.8,
+            label=f"Threshold (µ + {n_std}σ)"
+        )
+        ax.axhline(0, color="black", linestyle="-", linewidth=0.5)
         ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
         ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
         ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
@@ -163,14 +206,21 @@ class Analysis:
             f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
         )
         ax.set_xlabel("Pixel x")
-        ax.set_ylabel("Counts")
+        ax.set_ylabel(ylabel)
         ax.legend()
         plt.grid()
         plt.tight_layout()
+        roi_signal = spectrum_plot[xmin:xmax + 1]
+        y_min = spectrum_plot.min()
+        y_max = roi_signal.max()
+        margin = 0.1 * (y_max - y_min)
+        ax.set_ylim(y_min - margin, y_max + margin)
         plt.show()
 
-        print(f"Spatial ROI : lines [{r0}, {r1}] — peak y={peak_row}")
+        print(f"Spatial ROI  : lines [{r0}, {r1}] — peak y={peak_row}")
         print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
+        if subtract_baseline:
+            print(f"Baseline     : {baseline:.2f} {unit_str}")
 
     @staticmethod
     def _largest_region(mask: np.ndarray):
