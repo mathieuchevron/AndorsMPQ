@@ -68,6 +68,7 @@ class Analysis:
         ax.set_title(f"Spectre — frame {frame}")
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
+        plt.grid()
         plt.tight_layout()
         plt.show()
 
@@ -104,6 +105,7 @@ class Analysis:
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
         ax.legend()
+        plt.grid()
         plt.tight_layout()
         plt.show()
 
@@ -179,6 +181,7 @@ class Analysis:
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
         ax.legend()
+        plt.grid()
         plt.tight_layout()
         plt.show()
 
