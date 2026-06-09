@@ -8,6 +8,7 @@ from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
+from scipy.optimize import curve_fit
 from .raw_data import AcquisitionRawData
 from .metadata import AcquisitionMetadata
 
@@ -109,7 +110,8 @@ class Analysis:
         photon: bool = False,
         sensitivity: float = 3.6,
         QE: float = 0.55,
-    ) -> None:
+        gaussian_fit: bool = False,
+    ) -> dict | None:
         """
         Détecte automatiquement le ROI spatial et spectral, puis affiche le spectre.
 
@@ -131,7 +133,18 @@ class Analysis:
             Facteur de conversion e⁻/ADU (iXon Ultra 897, 1 MHz).
         QE : float
             Efficacité quantique du capteur à la longueur d'onde du signal.
+        gaussian_fit : bool
+            Si True, ajuste une gaussienne sur le ROI spectral et retourne
+            les paramètres du fit.
+
+        Returns
+        -------
+        dict | None
+            None si gaussian_fit=False.
+            Dict avec amplitude, center, sigma_fit, fwhm, offset, perr si
+            gaussian_fit=True.
         """
+
         data = self._raw_data.frame(frame)
 
         # ── 1. ROI spatial ────────────────────────────────────────────────
@@ -152,7 +165,7 @@ class Analysis:
             elif dt == "electrons":
                 spectrum = spectrum / QE
             elif dt == "photons":
-                pass  # déjà en photons, rien à faire
+                pass
             else:
                 print(f"Warning: unknown DataType '{self._metadata.data_type}', no conversion applied.")
 
@@ -185,22 +198,58 @@ class Analysis:
 
         ylabel = unit_str + (" (baseline subtracted)" if subtract_baseline else "")
 
-        # ── 6. Tracé ──────────────────────────────────────────────────────
+        # ── 6. Fit gaussien (optionnel) ───────────────────────────────────
+        fit_result = None
+        if gaussian_fit:
+            pixels_roi   = np.arange(xmin, xmax + 1)
+            spectrum_roi = spectrum_plot[xmin:xmax + 1]
+
+            def _gaussian(x, amplitude, center, sigma_g, offset):
+                return amplitude * np.exp(-0.5 * ((x - center) / sigma_g) ** 2) + offset
+
+            offset_0    = spectrum_roi.min()
+            amplitude_0 = spectrum_roi.max() - offset_0
+            center_0    = pixels_roi[np.argmax(spectrum_roi)]
+            sigma_0     = (xmax - xmin) / 4
+
+            try:
+                popt, pcov = curve_fit(
+                    _gaussian, pixels_roi, spectrum_roi,
+                    p0=[amplitude_0, center_0, sigma_0, offset_0]
+                )
+                amplitude, center, sigma_g, offset_fit = popt
+                fwhm = 2 * np.sqrt(2 * np.log(2)) * abs(sigma_g)
+                perr = np.sqrt(np.diag(pcov))
+
+                fit_result = {
+                    "amplitude" : amplitude,
+                    "center"    : center,
+                    "sigma_fit" : abs(sigma_g),
+                    "fwhm"      : fwhm,
+                    "offset"    : offset_fit,
+                    "perr"      : perr,
+                }
+            except RuntimeError:
+                print("Warning: Gaussian fit failed.")
+
+        # ── 7. Tracé ──────────────────────────────────────────────────────
         pixels = np.arange(spectrum.shape[0])
 
         _, ax = plt.subplots()
         ax.plot(pixels, spectrum_plot, color="steelblue", label="Raw spectrum")
-        ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed,
-                color="orange", linewidth=2, linestyle="--", label="Smoothed")
-        ax.axhline(
-            threshold - baseline if subtract_baseline else threshold,
-            color="gray", linestyle=":", linewidth=0.8,
-            label=f"Threshold (µ + {n_std}σ)"
-        )
+        ax.plot(pixels, smoothed - baseline if subtract_baseline else smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
+        ax.axhline(threshold - baseline if subtract_baseline else threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
         ax.axhline(0, color="black", linestyle="-", linewidth=0.5)
         ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
         ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
         ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
+
+        if gaussian_fit and fit_result is not None:
+            x_fit = np.linspace(xmin, xmax, 500)
+            ax.plot(x_fit, _gaussian(x_fit, *popt),
+                    color="red", linewidth=1.5,
+                    label=f"Gaussian fit (FWHM={fit_result['fwhm']:.1f} px)")
+
         ax.set_title(
             f"Auto ROI spectrum — frame {frame}\n"
             f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
@@ -221,6 +270,13 @@ class Analysis:
         print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
         if subtract_baseline:
             print(f"Baseline     : {baseline:.2f} {unit_str}")
+        if gaussian_fit and fit_result is not None:
+            print(f"Gaussian fit :")
+            print(f"  Center    : {fit_result['center']:.2f} px  ± {fit_result['perr'][1]:.2f}")
+            print(f"  FWHM      : {fit_result['fwhm']:.2f} px  ± {2 * np.sqrt(2 * np.log(2)) * fit_result['perr'][2]:.2f}")
+            print(f"  Amplitude : {fit_result['amplitude']:.2f}  ± {fit_result['perr'][0]:.2f}")
+
+        return fit_result
 
     @staticmethod
     def _largest_region(mask: np.ndarray):

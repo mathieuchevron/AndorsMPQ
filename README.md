@@ -101,7 +101,8 @@ f.analysis.spec_ROI_auto(
     subtract_baseline = False,  # If True, subtracts the mean of pixels outside the spectral ROI.
     photon = False,             # If True, converts the spectrum to incident photons.
     sensitivity = 3.6,          # Conversion factor e⁻/ADU (iXon Ultra 897, 1 MHz).
-    QE = 0.55                   # Quantum efficiency of the sensor at the signal wavelength.
+    QE = 0.55,                  # Quantum efficiency of the sensor at the signal wavelength.
+    gaussian_fit = False        # If True, fits a Gaussian curve to the spectral ROI and returns the fit parameters.
     )
 ```
 
