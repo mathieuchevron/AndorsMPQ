@@ -1,10 +1,10 @@
-from __future__ import annotations
 """
 AndorsMPQ.analysis
 ==================
 Classe d'analyse des données brutes d'un fichier .sif Andor.
 """
 
+from __future__ import annotations
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.ndimage import gaussian_filter1d
@@ -14,9 +14,6 @@ from .raw_data import AcquisitionRawData
 class Analysis:
     """
     Fournit des méthodes d'analyse à partir des données brutes.
-
-    Reçoit un AcquisitionRawData et expose des méthodes
-    pour extraire et traiter les données pixel.
     """
 
     def __init__(self, raw_data: AcquisitionRawData):
@@ -35,14 +32,14 @@ class Analysis:
         Parameters
         ----------
         frame : int
-            Indice de la frame (0-based). Par défaut 0.
+            Indice de la frame.
         """
         data = self._raw_data.frame(frame)
 
         fig, ax = plt.subplots()
         im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto")
         fig.colorbar(im, ax=ax, label="Counts")
-        ax.set_title(f"Image CCD brute — frame {frame}")
+        ax.set_title(f"Raw CCD image — frame {frame}")
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Pixel y")
         plt.tight_layout()
@@ -52,12 +49,10 @@ class Analysis:
         """
         Affiche le spectre en counts intégré sur tous les pixels y.
 
-        Pour chaque pixel x, somme les counts sur l'ensemble des lignes y.
-
         Parameters
         ----------
         frame : int
-            Indice de la frame (0-based). Par défaut 0.
+            Indice de la frame.
         """
         data = self._raw_data.frame(frame)
         spectrum = data.sum(axis=0)
@@ -65,7 +60,7 @@ class Analysis:
 
         fig, ax = plt.subplots()
         ax.plot(pixels, spectrum)
-        ax.set_title(f"Spectre — frame {frame}")
+        ax.set_title(f"Spectrum — frame {frame}")
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
         plt.grid()
@@ -83,7 +78,7 @@ class Analysis:
         xmax : int
             Pixel x de fin du ROI (inclus).
         frame : int
-            Indice de la frame (0-based). Par défaut 0.
+            Indice de la frame.
         """
         data = self._raw_data.frame(frame)
         spectrum = data.sum(axis=0)
@@ -91,17 +86,17 @@ class Analysis:
 
         if xmin < 0 or xmax >= n_pixels or xmin >= xmax:
             raise ValueError(
-                f"ROI invalide : xmin={xmin}, xmax={xmax} "
-                f"(pixels disponibles : 0 à {n_pixels - 1})"
+                f"Invalid ROI : xmin={xmin}, xmax={xmax} "
+                f"(available pixels : 0 to {n_pixels - 1})"
             )
 
         pixels = np.arange(xmin, xmax + 1)
 
-        fig, ax = plt.subplots()
+        _, ax = plt.subplots()
         ax.plot(pixels, spectrum[xmin:xmax + 1])
         ax.axvline(xmin, color="red", linestyle="--", linewidth=0.8, label=f"xmin={xmin}")
         ax.axvline(xmax, color="red", linestyle="--", linewidth=0.8, label=f"xmax={xmax}")
-        ax.set_title(f"Spectre ROI manuel — frame {frame} — pixels [{xmin}, {xmax}]")
+        ax.set_title(f"Manual ROI Spectrum — frame {frame} — pixels [{xmin}, {xmax}]")
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
         ax.legend()
@@ -119,24 +114,16 @@ class Analysis:
         """
         Détecte automatiquement le ROI spatial et spectral, puis affiche le spectre.
 
-        Étapes :
-        1. ROI spatial  — somme selon x → profil vertical → ±spatial_half lignes
-                          autour du maximum
-        2. Extraction   — somme selon y uniquement sur les lignes du ROI spatial
-        3. ROI spectral — lissage gaussien + seuil moyenne + n_std × écart-type
-                          → région contiguë la plus large
-        4. Tracé        — spectre brut limité au ROI spectral
-
         Parameters
         ----------
         frame : int
-            Indice de la frame (0-based). Par défaut 0.
+            Indice de la frame.
         spatial_half : int
-            Demi-largeur du ROI spatial en lignes y. Par défaut 10.
+            Demi-largeur du ROI spatial en lignes y.
         sigma : float
-            Écart-type du filtre gaussien pour le lissage spectral. Par défaut 5.
+            Écart-type du filtre gaussien pour le lissage spectral.
         n_std : float
-            Nombre d'écarts-types pour le seuil spectral. Par défaut 1.
+            Nombre d'écarts-types pour le seuil spectral.
         """
         data = self._raw_data.frame(frame)
 
@@ -157,26 +144,23 @@ class Analysis:
 
         if xmin is None:
             raise RuntimeError(
-                "Aucune région signal détectée. "
-                "Essaie de réduire n_std ou d'augmenter sigma."
+                "No signal region detected."
+                "Try reducing n_std or increasing sigma."
             )
 
         # ── 4. Tracé ──────────────────────────────────────────────────────
         pixels = np.arange(spectrum.shape[0])
 
-        fig, ax = plt.subplots()
-        ax.plot(pixels, spectrum, color="steelblue", label="Spectre brut")
-        ax.plot(pixels, smoothed, color="orange", linewidth=1.5,
-                linestyle="--", label="Lissé")
-        ax.axhline(threshold, color="gray", linestyle=":", linewidth=0.8,
-                   label=f"Seuil (µ + {n_std}σ)")
-        ax.axvspan(xmin, xmax, alpha=0.15, color="green",
-                   label=f"ROI spectral [{xmin}, {xmax}]")
+        _, ax = plt.subplots()
+        ax.plot(pixels, spectrum, color="steelblue", label="Raw spectrum")
+        ax.plot(pixels, smoothed, color="orange", linewidth=2, linestyle="--", label="Smoothed")
+        ax.axhline(threshold, color="gray", linestyle=":", linewidth=0.8, label=f"Threshold (µ + {n_std}σ)")
+        ax.axvspan(xmin, xmax, alpha=0.15, color="green", label=f"Spectral ROI [{xmin}, {xmax}]")
         ax.axvline(xmin, color="green", linestyle="--", linewidth=0.8)
         ax.axvline(xmax, color="green", linestyle="--", linewidth=0.8)
         ax.set_title(
-            f"Spectre ROI auto — frame {frame}\n"
-            f"ROI spatial lignes [{r0}, {r1}] autour de y={peak_row}"
+            f"Auto ROI spectrum — frame {frame}\n"
+            f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
         )
         ax.set_xlabel("Pixel x")
         ax.set_ylabel("Counts")
@@ -185,8 +169,8 @@ class Analysis:
         plt.tight_layout()
         plt.show()
 
-        print(f"ROI spatial  : lignes [{r0}, {r1}] — pic y={peak_row}")
-        print(f"ROI spectral : pixels [{xmin}, {xmax}]")
+        print(f"Spatial ROI : lines [{r0}, {r1}] — peak y={peak_row}")
+        print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
 
     @staticmethod
     def _largest_region(mask: np.ndarray):

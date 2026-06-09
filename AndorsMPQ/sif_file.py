@@ -1,8 +1,8 @@
-from __future__ import annotations
 """
 Class SifFile : Point d'entrée pour lire un fichier .sif
 """
 
+from __future__ import annotations
 import os
 
 try:
@@ -18,10 +18,6 @@ from .analysis import Analysis
 class SifFile:
     """
     Représente un fichier .sif
-
-    Chargement
-    ----------
-    f = SifFile("fichier.sif")
     """
 
     def __init__(self, path: str):

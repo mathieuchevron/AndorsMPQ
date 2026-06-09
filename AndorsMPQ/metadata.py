@@ -1,5 +1,8 @@
-
-# Conteneur orienté pour les métadata (décrit les conditions d'enregistrement)
+"""
+AndorsMPQ.raw_data
+==================
+# Conteneur orienté pour les métadata. 
+"""
 
 
 from __future__ import annotations
@@ -11,10 +14,7 @@ import math
 @dataclass
 class AcquisitionMetadata:
     """
-    Métadonnées d'acquisition extraites d'un fichier .sif Andor iXon Ultra.
-
-    Décrit les conditions d'enregistrement : timing, détecteur, gain,
-    binning, spectromètre. Ne contient pas les données pixel brutes.
+    Métadonnées d'acquisition extraites d'un fichier .sif.
     """
 
     # ------------------------------------------------------------------ #
@@ -95,9 +95,7 @@ class AcquisitionMetadata:
     sif_version: Optional[int] = None
     """Version interne du format SIF."""
 
-    # ------------------------------------------------------------------ #
-    #  Constructeur depuis le dict brut de sif_parser                     #
-    # ------------------------------------------------------------------ #
+
     @classmethod
     def from_raw(cls, info: dict) -> "AcquisitionMetadata":
         """
@@ -178,7 +176,7 @@ class AcquisitionMetadata:
         """Retourne un résumé lisible des métadonnées principales."""
         lines = [
             "═" * 50,
-            "  Métadonnées d'acquisition — Andor iXon Ultra",
+            "  Acquisition Metadata — Andor iXon Ultra",
             "═" * 50,
         ]
 
@@ -188,28 +186,28 @@ class AcquisitionMetadata:
             return f"  {label:<30} {value}  {unit}".rstrip()
 
         dt = self.acquisition_datetime
-        lines.append(_row("Date d'acquisition", dt.strftime("%Y-%m-%d %H:%M:%S") if dt else None))
-        lines.append(_row("Fichier original", self.original_filename))
+        lines.append(_row("Acquisition date", dt.strftime("%Y-%m-%d %H:%M:%S") if dt else None))
+        lines.append(_row("Original filename", self.original_filename))
         lines.append("")
-        lines.append("  [Détecteur]")
-        lines.append(_row("  Modèle", self.detector_type))
-        lines.append(_row("  Dimensions capteur", self.detector_dimensions, "px"))
-        lines.append(_row("  Température", self.detector_temperature, "°C"))
+        lines.append("  [Detector]")
+        lines.append(_row("  Model", self.detector_type))
+        lines.append(_row("  Sensor dimensions", self.detector_dimensions, "px"))
+        lines.append(_row("  Temperature", self.detector_temperature, "°C"))
         lines.append("")
         lines.append("  [Acquisition]")
-        lines.append(_row("  Temps d'exposition", self.exposure_time, "s"))
-        lines.append(_row("  Temps de cycle", self.cycle_time, "s"))
-        lines.append(_row("  Cycles accumulés", self.accumulated_cycles))
-        lines.append(_row("  Gain EM (DAC)", self.em_gain_dac))
+        lines.append(_row("  Exposure time", self.exposure_time, "s"))
+        lines.append(_row("  Cycle time", self.cycle_time, "s"))
+        lines.append(_row("  Accumulated cycles", self.accumulated_cycles))
+        lines.append(_row("  EM gain (DAC)", self.em_gain_dac))
         lines.append(_row("  Binning (x, y)", self.binning))
         lines.append("")
-        lines.append("  [Spectromètre]")
-        lines.append(_row("  Spectromètre", self.spectrograph))
-        lines.append(_row("  Blaze réseau", self.grating_blaze, "nm"))
-        lines.append(_row("  λ excitation Raman", self.raman_excitation_wavelength, "nm"))
+        lines.append("  [Spectrograph]")
+        lines.append(_row("  Spectrograph", self.spectrograph))
+        lines.append(_row("  Grating blaze", self.grating_blaze, "nm"))
+        lines.append(_row("  Raman excitation λ", self.raman_excitation_wavelength, "nm"))
         if self.user_text:
             lines.append("")
-            lines.append(f"  [Note utilisateur]\n  {self.user_text}")
+            lines.append(f"  [User note]\n  {self.user_text}")
         lines.append("═" * 50)
         return "\n".join(lines)
 

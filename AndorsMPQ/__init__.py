@@ -1,15 +1,7 @@
 """
 AndorsMPQ
 =========
-Librairie orientée objet pour lire et analyser les fichiers .sif
-produits par les caméras Andor iXon Ultra (laboratoire MPQ/QITE).
-
-Usage minimal
--------------
->>> from AndorsMPQ import SifFile
->>> f = SifFile("acquisition.sif")
->>> print(f.metadata.summary())
->>> arr = f.raw_data.data
+Librairie orientée objet pour lire et analyser les fichiers .sif produits par les caméras Andor iXon Ultra.
 """
 
 from .sif_file import SifFile

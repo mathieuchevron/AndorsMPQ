@@ -1,7 +1,7 @@
 """
 AndorsMPQ.raw_data
 ==================
-Conteneur orienté objet pour les données pixel brutes d'un fichier .sif Andor.
+Conteneur orienté objet pour les données pixel brutes.
 """
 
 from __future__ import annotations
@@ -11,10 +11,7 @@ import numpy as np
 
 class AcquisitionRawData:
     """
-    Contient et expose les données pixel brutes d'un fichier .sif Andor.
-
-    Ne lit pas le fichier elle-même — elle reçoit le tableau numpy
-    déjà chargé par SifFile.
+    Contient et expose les données pixel brutes d'un fichier .sif.
     """
 
     def __init__(self, data: np.ndarray):
@@ -22,7 +19,7 @@ class AcquisitionRawData:
         Parameters
         ----------
         data : np.ndarray
-            Tableau de shape (n_frames, height, width), dtype float32.
+            Tableau de shape (n_frames, height, width).
         """
         if data.ndim == 2:
             data = data[np.newaxis, ...]  # normalise en (1, H, W)
@@ -33,7 +30,7 @@ class AcquisitionRawData:
     # ------------------------------------------------------------------ #
     @property
     def data(self) -> np.ndarray:
-        """Tableau complet (n_frames, height, width), dtype float32."""
+        """Tableau complet (n_frames, height, width)."""
         return self._data
 
     @property
@@ -62,11 +59,6 @@ class AcquisitionRawData:
         -------
         np.ndarray
             Tableau 2D (height, width).
-
-        Raises
-        ------
-        IndexError
-            Si l'indice est hors bornes.
         """
         if not (0 <= index < self.n_frames):
             raise IndexError(
