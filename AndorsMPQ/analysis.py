@@ -198,7 +198,7 @@ class Analysis:
 
         ylabel = unit_str + (" (baseline subtracted)" if subtract_baseline else "")
 
-        # ── 6. Fit gaussien (optionnel) ───────────────────────────────────
+        # ── 6. Fit gaussien ───────────────────────────────────
         fit_result = None
         if gaussian_fit:
             pixels_roi   = np.arange(xmin, xmax + 1)
