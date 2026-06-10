@@ -21,32 +21,39 @@ class Analysis:
         self._raw_data = raw_data
         self._metadata = metadata
 
-    def image(self, frame: int = 0, wavelength_axis: np.ndarray | None = None,) -> None:
+    def image(self, frame: int = 0, wavelength_axis: np.ndarray | None = None) -> None:
         """
         Affiche l'image CCD brute d'une frame.
 
+        Convention des axes :
+            axis=0 (vertical, y)   →  axe spectral  (λ)
+            axis=1 (horizontal, x) →  axe spatial
+
         Parameters
         ----------
-        frame : 
+        frame : int
             Indice de la frame.
-        wavelength_axis : 
-            Si fourni, l'axe x est affiché en nm.
+        wavelength_axis : np.ndarray | None
+            Si fourni, l'axe y est affiché en nm.
         """
         data = self._raw_data.frame(frame)
 
         _, ax = plt.subplots()
+
         if wavelength_axis is not None:
-            extent = [wavelength_axis[0], wavelength_axis[-1], 0, data.shape[0]]
-            im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto", extent=extent)
-            ax.set_xlabel("Wavelength (nm)")
+            # x : spatial [0, shape[1]], y : spectral [lambda_min, lambda_max]
+            extent = [0, data.shape[1], wavelength_axis[0], wavelength_axis[-1]]
+            im = ax.imshow(data, origin="lower", cmap="inferno",
+                        aspect="auto", extent=extent)
+            ax.set_ylabel("Wavelength (nm)")
         else:
             im = ax.imshow(data, origin="lower", cmap="inferno", aspect="auto")
-            ax.set_xlabel("Pixel x")
+            ax.set_ylabel("Pixel y (spectral)")
 
         fig = ax.get_figure()
         fig.colorbar(im, ax=ax, label="Counts")
         ax.set_title(f"Raw CCD image — frame {frame}")
-        ax.set_ylabel("Pixel y")
+        ax.set_xlabel("Pixel x (spatial)")
         plt.tight_layout()
         plt.show()
 
@@ -60,14 +67,14 @@ class Analysis:
             Indice de la frame.
         """
         data = self._raw_data.frame(frame)
-        spectrum = data.sum(axis=0)
+        spectrum = data.sum(axis=1)
 
         if wavelength_axis is not None:
             x_axis = wavelength_axis
             xlabel = "Wavelength (nm)"
         else:
             x_axis = np.arange(spectrum.shape[0])
-            xlabel = "Pixel x"
+            xlabel = "Pixel y"
 
         _, ax = plt.subplots()
         ax.plot(x_axis, spectrum)
@@ -92,7 +99,7 @@ class Analysis:
             Indice de la frame.
         """
         data = self._raw_data.frame(frame)
-        spectrum = data.sum(axis=0)
+        spectrum = data.sum(axis=1)
         n_pixels = spectrum.shape[0]
 
         if xmin < 0 or xmax >= n_pixels or xmin >= xmax:
@@ -108,7 +115,7 @@ class Analysis:
         ax.axvline(xmin, color="red", linestyle="--", linewidth=0.8, label=f"xmin={xmin}")
         ax.axvline(xmax, color="red", linestyle="--", linewidth=0.8, label=f"xmax={xmax}")
         ax.set_title(f"Manual ROI Spectrum — frame {frame} — pixels [{xmin}, {xmax}]")
-        ax.set_xlabel("Pixel x")
+        ax.set_xlabel("Pixel y")
         ax.set_ylabel("Counts")
         ax.legend()
         plt.grid()
@@ -118,6 +125,7 @@ class Analysis:
     def spec_ROI_auto(
         self,
         frame: int = 0,
+        spatial_roi: bool = True,
         spatial_half: int = 10,
         sigma: float = 5.0,
         n_std: float = 1.0,
@@ -136,8 +144,10 @@ class Analysis:
         ----------
         frame : int
             Indice de la frame.
+        spatial_roi : bool
+            Si False, intègre sur toutes les lignes y sans détection de ROI spatial.
         spatial_half : int
-            Demi-largeur du ROI spatial en lignes y.
+            Demi-largeur du ROI spatial en pixels y. Ignoré si spatial_roi=False.
         sigma : float
             Écart-type du filtre gaussien pour le lissage spectral.
         n_std : float
@@ -167,13 +177,18 @@ class Analysis:
         data = self._raw_data.frame(frame)
 
         # ── 1. ROI spatial ────────────────────────────────────────────────
-        row_profile = data.sum(axis=1).astype(float)
-        peak_row = int(np.argmax(row_profile))
-        r0 = max(0, peak_row - spatial_half)
-        r1 = min(data.shape[0], peak_row + spatial_half + 1)
+        if spatial_roi:
+            col_profile = data.sum(axis=0).astype(float)
+            peak_col    = int(np.argmax(col_profile))
+            r0          = max(0, peak_col - spatial_half)
+            r1          = min(data.shape[1], peak_col + spatial_half + 1)
+        else:
+            peak_col = None
+            r0       = 0
+            r1       = data.shape[1]
 
         # ── 2. Extraction spectre sur ROI spatial ─────────────────────────
-        spectrum = data[r0:r1, :].sum(axis=0).astype(float)
+        spectrum = data[:, r0:r1].sum(axis=1).astype(float)
 
         # ── 2.5 Conversion en photons ─────────────────────────────────────
         if photon:
@@ -189,9 +204,9 @@ class Analysis:
                 print(f"Warning: unknown DataType '{self._metadata.data_type}', no conversion applied.")
 
         # ── 3. ROI spectral ───────────────────────────────────────────────
-        smoothed = gaussian_filter1d(spectrum, sigma=sigma)
+        smoothed  = gaussian_filter1d(spectrum, sigma=sigma)
         threshold = smoothed.mean() + n_std * smoothed.std()
-        above = smoothed > threshold
+        above     = smoothed > threshold
         xmin, xmax = self._largest_region(above)
 
         if xmin is None:
@@ -201,7 +216,7 @@ class Analysis:
             )
 
         # ── 4. Soustraction de baseline ───────────────────────────────────
-        outside = np.concatenate([spectrum[:xmin], spectrum[xmax + 1:]])
+        outside  = np.concatenate([spectrum[:xmin], spectrum[xmax + 1:]])
         baseline = outside.mean()
 
         if subtract_baseline:
@@ -294,10 +309,9 @@ class Analysis:
                         color="red", linewidth=1.5,
                         label=f"Gaussian fit ({fwhm_label})")
 
-            ax.set_title(
-                f"Auto ROI spectrum — frame {frame}\n"
-                f"Spatial ROI lines [{r0}, {r1}] around y={peak_row}"
-            )
+            spatial_title = (f"Spatial ROI columns [{r0}, {r1}] around x={peak_col}"
+                             if spatial_roi else "No spatial ROI — full sensor integration")
+            ax.set_title(f"Auto ROI spectrum — frame {frame}\n{spatial_title}")
             ax.set_xlabel(xlabel)
             ax.set_ylabel(ylabel)
             ax.legend()
@@ -310,7 +324,9 @@ class Analysis:
             ax.set_ylim(y_min - margin, y_max + margin)
             plt.show()
 
-            print(f"Spatial ROI  : lines [{r0}, {r1}] — peak y={peak_row}")
+            spatial_print = (f"columns [{r0}, {r1}] — peak x={peak_col}"
+                             if spatial_roi else "disabled (full integration)")
+            print(f"Spatial ROI  : {spatial_print}")
             print(f"Spectral ROI : pixels [{xmin}, {xmax}]")
             if snr_value is not None:
                 print(f"SNR          : {snr_value:.2f}  (signal={signal:.2f}, noise={noise:.2f})")
@@ -376,23 +392,25 @@ class Analysis:
         pixel_size: float,          # Taille d'un pixel en mm
     ) -> np.ndarray:
 
-        n_pixels = self._raw_data.shape[2]
+        n_pixels = self._raw_data.shape[1]
         x = np.arange(n_pixels)
 
-        theta_0_rad = np.deg2rad(theta_0 + delta)
+        theta_r0_rad = np.deg2rad(theta_0)
+        theta_l0_rad = np.deg2rad(theta_0 - delta)
         alpha_rad = np.deg2rad(alpha)
+        delta_rad = np.deg2rad(delta)
 
         # Position physique sur le capteur
         X = (x - x_ref) * pixel_size
 
         # Intermédiaire B
-        B = X / f + np.sin(theta_0_rad) / np.cos(alpha_rad + theta_0_rad)
+        B = X / f + np.sin(theta_l0_rad) / np.cos(alpha_rad + theta_l0_rad)
 
-        # Angle local psi
-        psi = np.arctan(B * np.cos(alpha_rad) / (1 + B * np.sin(alpha_rad))) - theta_0_rad
+        # Theta_s
+        theta_s = np.arctan(B * np.cos(alpha_rad) / (1 + B * np.sin(alpha_rad)))
 
         # Relation de dispersion exacte
-        wavelength = lambda_ref + (np.sin(theta_0_rad + psi) - np.sin(theta_0_rad)) / (m * N) * 1e6
+        wavelength = lambda_ref + (np.sin(delta_rad + theta_s) - np.sin(theta_r0_rad)) / (m * N) * 1e6
 
         return wavelength
 

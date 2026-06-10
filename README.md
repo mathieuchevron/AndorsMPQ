@@ -44,23 +44,19 @@ f = SifFile("acquisition.sif")
 print(f.metadata.summary())
 
 # Individual fields
-print(...)
-
 f.metadata.exposure_time          # exposure time in s
 f.metadata.detector_temperature   # sensor temperature in °C
 f.metadata.em_gain_dac            # EM gain (raw DAC value)
 f.metadata.binning                # (xbin, ybin)
 f.metadata.detector_type          # sensor model
 f.metadata.acquisition_datetime   # acquisition date and time
-...
 ```
 
 ### Access raw data
 
 ```python
-tab = f.raw_data.data          # np.ndarray (n_frames, height, width)
-
-tab = f.raw_data.frame(n)      # np.ndarray (height, width) for frame n
+f.raw_data.data          # np.ndarray (n_frames, height, width)
+f.raw_data.frame(n)      # np.ndarray (height, width) for frame n
 ```
 
 ---
@@ -111,17 +107,18 @@ Automatically detects the signal band (spatial ROI) and the spectral region (spe
 
 ```python
 f.analysis.spec_ROI_auto(
-    frame            = 0,      # Frame index.
-    spatial_half     = 10,     # Half-width of the spatial ROI in y-lines.
-    sigma            = 5.0,    # Standard deviation of the Gaussian filter for spectral smoothing.
-    n_std            = 1.0,    # Number of standard deviations for the spectral threshold.
-    subtract_baseline = False, # If True, subtracts the mean of pixels outside the spectral ROI.
-    photon           = False,  # If True, converts the spectrum to incident photons.
-    sensitivity      = 3.6,    # Conversion factor e⁻/ADU (iXon Ultra 897, 1 MHz).
-    QE               = 0.55,   # Quantum efficiency of the sensor at the signal wavelength.
-    gaussian_fit     = False,  # If True, fits a Gaussian to the spectral ROI.
-    plot             = True,   # If False, suppresses plot and prints. Result still returned.
-    wavelength_axis  = None,   # If provided, x-axis is displayed in nm.
+    frame             = 0,      # Frame index.
+    spatial_roi       = True,   # If False, integrates over all y pixels (no spatial ROI).
+    spatial_half      = 10,     # Half-width of the spatial ROI in pixels. Ignored if spatial_roi=False.
+    sigma             = 5.0,    # Standard deviation of the Gaussian filter for spectral smoothing.
+    n_std             = 1.0,    # Number of standard deviations for the spectral threshold.
+    subtract_baseline = False,  # If True, subtracts the mean of pixels outside the spectral ROI.
+    photon            = False,  # If True, converts the spectrum to incident photons.
+    sensitivity       = 3.6,    # Conversion factor e⁻/ADU (iXon Ultra 897, 1 MHz).
+    QE                = 0.55,   # Quantum efficiency of the sensor at the signal wavelength.
+    gaussian_fit      = False,  # If True, fits a Gaussian to the spectral ROI.
+    plot              = True,   # If False, suppresses plot and prints. Result still returned.
+    wavelength_axis   = None,   # If provided, x-axis is displayed in nm.
 )
 ```
 
